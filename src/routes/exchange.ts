@@ -5,10 +5,9 @@ import { redis } from '../redis';
 
 const router = Router();
 
-async function generateHeaders(bodyRequest: any): Promise<Record<string, string>> {
+function generateHeaders(body: any): Record<string, string> {
     const date = Date.now().toString();
-    const msg = (bodyRequest ? JSON.stringify(bodyRequest) : '') + date;
-
+    const msg = (body ? JSON.stringify(body) : '') + date;
     const signatureApiKey = process.env.SIGNATURE_API_KEY || '';
     const hmac = cryptoJS.HmacSHA512(msg, signatureApiKey).toString();
     return {
@@ -66,8 +65,10 @@ router.post('/exchange/*', async (req: Request, res: Response) => {
         respBody = resp;
     }
 
-    const headers = await generateHeaders(req.body);
-    Object.entries(headers).forEach(([name, value]) => res.setHeader(name, value));
+    const headers = generateHeaders(respBody);
+    Object.entries(headers).forEach(([name, value]) =>
+        res.setHeader(name, value)
+    );
 
     return res.status(statusCode).json(respBody);
 });
