@@ -1,8 +1,21 @@
+import cryptoJS from 'crypto-js';
 import { Router, Request, Response } from 'express';
 
 import { redis } from '../redis';
 
 const router = Router();
+
+async function generateHeaders(bodyRequest: any): Promise<Record<string, string>> {
+    const date = Date.now().toString();
+    const msg = (bodyRequest ? JSON.stringify(bodyRequest) : '') + date;
+
+    const signatureApiKey = process.env.SIGNATURE_API_KEY || '';
+    const hmac = cryptoJS.HmacSHA512(msg, signatureApiKey).toString();
+    return {
+        'x-date': date,
+        'x-signature': hmac,
+    };
+}
 
 router.post('/exchange/*/set', async (req: Request, res: Response) => {
     const endpoint = req.params[0];
@@ -53,7 +66,10 @@ router.post('/exchange/*', async (req: Request, res: Response) => {
         respBody = resp;
     }
 
-    res.status(statusCode).json(respBody);
+    const headers = await generateHeaders(req.body);
+    Object.entries(headers).forEach(([name, value]) => res.setHeader(name, value));
+
+    return res.status(statusCode).json(respBody);
 });
 
 export default router;
