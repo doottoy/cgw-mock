@@ -58,7 +58,8 @@ router.post('/exchange/*/set', async (req: Request, res: Response) => {
         30 * 24 * 3600
     );
 
-    return res.sendStatus(existed ? 200 : 201);
+    const result = existed ? 'updated' : 'created';
+    return res.status(existed ? 200 : 201).json({ result, endpoint });
 });
 
 router.get('/exchange/*/history', async (req: Request, res: Response) => {
