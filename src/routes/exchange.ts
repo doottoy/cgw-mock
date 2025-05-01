@@ -41,7 +41,6 @@ function replaceRandomUUID(obj: any): any {
 router.post('/exchange/*/set', async (req: Request, res: Response) => {
     const endpoint = req.params[0];
     const { status, response: resp } = req.body;
-
     if (typeof status !== 'number' || typeof resp !== 'object') {
         return res
             .status(400)
@@ -91,7 +90,13 @@ router.post('/exchange/*', async (req: Request, res: Response) => {
     if (stubDataRaw) {
         const { status, response: resp } = JSON.parse(stubDataRaw);
         statusCode = status;
-        respBody = replaceRandomUUID(resp);
+        respBody = resp;
+
+        if (respBody.request_id === 'randomUUID') {
+            respBody.request_id = req.body.request_id || uuidv4();
+        }
+
+        respBody = replaceRandomUUID(respBody);
     }
 
     const headers = generateHeaders(respBody);
