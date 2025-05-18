@@ -80,7 +80,7 @@ async function defaultRequest(req: Request, res: Response) {
         if (respBody.request_id === 'randomUUID') respBody.request_id = req.body.request_id || uuidv4()
         respBody = replaceRandomUUID(respBody)
     }
-    const reqId = respBody.request_id || (req.body?.body && (req.body.body as any).id)
+    const reqId = respBody.data?.tx_id || respBody.request_id || (req.body?.body && (req.body.body as any).id)
     if (reqId) {
         const mapKey = `request:${route}:${endpoint}:${reqId}`
         await redis.set(mapKey, JSON.stringify({ request: record, response: { status: statusCode, body: respBody } }))
