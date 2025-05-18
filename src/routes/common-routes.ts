@@ -27,20 +27,20 @@ async function saveNewEndpointToRedis(req: Request, res: Response) {
 async function deleteEndpointFromRedis(req: Request, res: Response) {
     const route = req.path.split('/')[1];
     const endpoint = req.params[0];
-    const method = req.params.method;
-    const key = makeStubKey(route, endpoint, method);
-    const existed = await redis.exists(key);
-    if (!existed) return res.sendStatus(404);
+    const pattern = `stub:${route}:${endpoint}:*`;
+    const keys = await redis.keys(pattern);
+    if (keys.length === 0) return res.sendStatus(404);
 
-    await redis.del(key);
+    for (const key of keys) {
+        await redis.del(key);
+    }
     return res.sendStatus(204);
 }
 
 async function getHistory(req: Request, res: Response) {
     const route = req.path.split('/')[1];
     const endpoint = req.params[0];
-    const method = req.params.method;
-    const histKey = makeHistoryKey(route, endpoint, method);
+    const histKey = `history:${route}:${endpoint}`;
     const items = await redis.lrange(histKey, 0, 4);
     return res.status(200).json(items.map(i => JSON.parse(i)));
 }
@@ -110,8 +110,8 @@ async function defaultRequest(req: Request, res: Response) {
 export function attachCommonRoutes(router: Router, basePath: string): void {
     const path = basePath.endsWith('/') ? basePath.slice(0, -1) : basePath;
     router.post(`${path}/set/*`, saveNewEndpointToRedis);
-    router.delete(`${path}/delete/*/:method`, deleteEndpointFromRedis);
-    router.get(`${path}/history/*/:method`, getHistory);
+    router.delete(`${path}/delete/*`, deleteEndpointFromRedis);
+    router.get(`${path}/history/*`, getHistory);
     router.get(`${path}/stub-list`, getStubList);
     router.get(`${path}/*/:requestId`, getMapping);
     router.all(`${path}/*`, defaultRequest);
