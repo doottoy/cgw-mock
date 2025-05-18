@@ -1,10 +1,10 @@
-/* External dependencies */
-import { v4 as uuidv4 } from 'uuid';
-import { Router, Request, Response } from 'express';
+/* src/routes/common-routes.ts */
 
-/* Internal dependencies */
+import { Router, Request, Response } from 'express';
+import { v4 as uuidv4 } from 'uuid';
+
 import { redis } from '../redis';
-import { makeStubKey, makeHistoryKey } from '../utility/redisKeys';
+import { makeStubKey } from '../utility/redisKeys';
 import { generateHeaders, replaceRandomUUID } from '../utility/common';
 
 const methods = ['get', 'post', 'put', 'delete', 'patch'] as const;
@@ -14,6 +14,7 @@ async function saveNewEndpointToRedis(req: Request, res: Response) {
     if (typeof status !== 'number' || typeof resp !== 'object') {
         return res.status(400).json({ error: 'status (number), response (object) required' });
     }
+
     const route = req.path.split('/')[1];
     const endpoint = req.params[0];
     const httpMethod = methods.includes(method) ? method : 'post';
@@ -28,6 +29,7 @@ async function deleteEndpointFromRedis(req: Request, res: Response) {
     const route = req.path.split('/')[1];
     const endpoint = req.params[0];
     const pattern = `stub:${route}:${endpoint}:*`;
+
     const keys = await redis.keys(pattern);
     if (keys.length === 0) return res.sendStatus(404);
 
@@ -45,10 +47,11 @@ async function getHistory(req: Request, res: Response) {
     return res.status(200).json(items.map(i => JSON.parse(i)));
 }
 
-async function getStubList(req: Request, res: Response) {
-    const route = req.path.split('/')[1];
+async function getStubList(_req: Request, res: Response) {
+    const route = _req.path.split('/')[1];
     const keys = await redis.keys(`stub:${route}:*`);
-    const stubs = [] as Array<{ endpoint: string; status: number; response: any }>;
+    const stubs: Array<{ endpoint: string; status: number; response: any }> = [];
+
     for (const key of keys) {
         const endpoint = key.split(`stub:${route}:`)[1].split(':')[0];
         const raw = await redis.get(key);
@@ -57,16 +60,19 @@ async function getStubList(req: Request, res: Response) {
             stubs.push({ endpoint, status, response });
         }
     }
+
     return res.status(200).json(stubs);
 }
 
 async function getMapping(req: Request, res: Response) {
     const route= req.path.split('/')[1];
-    const endpoint= req.params[0];
-    const requestId= req.params.requestId;
+    const endpoint = req.params[0];
+    const requestId = req.params.requestId;
+
     const mapKey = `request:${route}:${endpoint}:${requestId}`;
-    const raw= await redis.get(mapKey);
+    const raw    = await redis.get(mapKey);
     if (!raw) return res.sendStatus(404);
+
     const { request, response } = JSON.parse(raw);
     return res.status(200).json({ request, response });
 }
@@ -77,7 +83,7 @@ async function defaultRequest(req: Request, res: Response) {
     const method = req.method.toLowerCase() as string;
 
     const record = { timestamp: new Date().toISOString(), method, body: req.body };
-    const histKey = makeHistoryKey(route, endpoint);
+    const histKey = `history:${route}:${endpoint}`;
     await redis.lpush(histKey, JSON.stringify(record));
     await redis.ltrim(histKey, 0, 4);
     await redis.expire(histKey, 30 * 24 * 3600);
@@ -86,10 +92,12 @@ async function defaultRequest(req: Request, res: Response) {
     const stubRaw = await redis.get(stubKey);
     let statusCode = 200;
     let respBody: any = {};
+
     if (stubRaw) {
         const { status, response: resp } = JSON.parse(stubRaw);
         statusCode = status;
-        respBody = resp;
+        respBody   = resp;
+
         if (respBody.request_id === 'randomUUID') {
             respBody.request_id = req.body.request_id || uuidv4();
         }
@@ -98,9 +106,12 @@ async function defaultRequest(req: Request, res: Response) {
 
     const reqId = respBody.request_id || (req.body?.body && (req.body.body as any).id);
     if (reqId) {
-        const mapKey = `request:${route}:${endpoint}:${reqId}`;
-        await redis.set(mapKey, JSON.stringify({ request: record, response: { status: statusCode, body: respBody } }));
-        await redis.expire(mapKey, 30 * 24 * 3600);
+        const mapKey2 = `request:${route}:${endpoint}:${reqId}`;
+        await redis.set(mapKey2, JSON.stringify({
+            request:  record,
+            response: { status: statusCode, body: respBody }
+        }));
+        await redis.expire(mapKey2, 30 * 24 * 3600);
     }
 
     Object.entries(generateHeaders(respBody)).forEach(([k, v]) => res.setHeader(k, v));
@@ -109,10 +120,11 @@ async function defaultRequest(req: Request, res: Response) {
 
 export function attachCommonRoutes(router: Router, basePath: string): void {
     const path = basePath.endsWith('/') ? basePath.slice(0, -1) : basePath;
-    router.post(`${path}/set/*`, saveNewEndpointToRedis);
+
+    router.all (`${path}/*`,defaultRequest);
+    router.get (`${path}/history/*`, getHistory);
+    router.get (`${path}/stub-list`, getStubList);
+    router.get (`${path}/*/:requestId`, getMapping);
+    router.post (`${path}/set/*`, saveNewEndpointToRedis);
     router.delete(`${path}/delete/*`, deleteEndpointFromRedis);
-    router.get(`${path}/history/*`, getHistory);
-    router.get(`${path}/stub-list`, getStubList);
-    router.get(`${path}/*/:requestId`, getMapping);
-    router.all(`${path}/*`, defaultRequest);
 }

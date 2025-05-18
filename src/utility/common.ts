@@ -11,8 +11,8 @@ export function loggingMiddleware(req: Request, res: Response, next: NextFunctio
     const { method, originalUrl } = req;
 
     console.groupCollapsed(`🔌 [${requestId}][${startTimestamp}] ${method} ${originalUrl}`);
-    console.log(`  [${requestId}] Request Headers:`, util.inspect(JSON.stringify(req.headers), { depth: null }));
-    console.log(`  [${requestId}] Request Body:   `, util.inspect(JSON.stringify(req.body), { depth: null }));
+    console.log(` [${requestId}] Request Headers:`, util.inspect(JSON.stringify(req.headers), { depth: null }));
+    console.log(` [${requestId}] Request Body:   `, util.inspect(JSON.stringify(req.body), { depth: null }));
     console.groupEnd();
 
     const originalJson = res.json.bind(res);
@@ -24,9 +24,9 @@ export function loggingMiddleware(req: Request, res: Response, next: NextFunctio
         const size = Buffer.byteLength(JSON.stringify(responseBody), 'utf8');
 
         console.groupCollapsed(`📤 [${requestId}][${endTimestamp}] ${method} ${originalUrl} (${duration}ms ⏱️)`);
-        console.log(`  [${requestId}] Response Size:    ${size} bytes`);
-        console.log(`  [${requestId}] Response Headers:`, util.inspect(JSON.stringify(res.getHeaders()), { depth: null }));
-        console.log(`  [${requestId}] Response Body:   `, util.inspect(JSON.stringify(responseBody), { depth: null }));
+        console.log(` [${requestId}] Response Size:    ${size} bytes`);
+        console.log(` [${requestId}] Response Headers:`, util.inspect(JSON.stringify(res.getHeaders()), { depth: null }));
+        console.log(` [${requestId}] Response Body:   `, util.inspect(JSON.stringify(responseBody), { depth: null }));
         console.groupEnd();
 
         return originalJson(body);
