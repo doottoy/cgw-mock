@@ -77,7 +77,7 @@ async function defaultRequest(req: Request, res: Response) {
     const method = req.method.toLowerCase() as string;
 
     const record = { timestamp: new Date().toISOString(), method, body: req.body };
-    const histKey = makeHistoryKey(route, endpoint, method);
+    const histKey = makeHistoryKey(route, endpoint);
     await redis.lpush(histKey, JSON.stringify(record));
     await redis.ltrim(histKey, 0, 4);
     await redis.expire(histKey, 30 * 24 * 3600);
