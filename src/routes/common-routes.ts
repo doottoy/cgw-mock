@@ -60,6 +60,17 @@ async function getStubList(req: Request, res: Response) {
     return res.status(200).json(stubs);
 }
 
+async function getMapping(req: Request, res: Response) {
+    const route= req.path.split('/')[1];
+    const endpoint= req.params[0];
+    const requestId= req.params.requestId;
+    const mapKey = `request:${route}:${endpoint}:${requestId}`;
+    const raw= await redis.get(mapKey);
+    if (!raw) return res.sendStatus(404);
+    const { request, response } = JSON.parse(raw);
+    return res.status(200).json({ request, response });
+}
+
 async function defaultRequest(req: Request, res: Response) {
     const route = req.path.split('/')[1];
     const endpoint = req.params[0];
@@ -85,9 +96,9 @@ async function defaultRequest(req: Request, res: Response) {
         respBody = replaceRandomUUID(respBody);
     }
 
-    const txId = req.body?.data?.tx_id as string | undefined;
-    if (txId) {
-        const mapKey = `request:${route}:${endpoint}:${txId}`;
+    const reqId = respBody.request_id || (req.body?.body && (req.body.body as any).id);
+    if (reqId) {
+        const mapKey = `request:${route}:${endpoint}:${reqId}`;
         await redis.set(mapKey, JSON.stringify({ request: record, response: { status: statusCode, body: respBody } }));
         await redis.expire(mapKey, 30 * 24 * 3600);
     }
@@ -95,18 +106,6 @@ async function defaultRequest(req: Request, res: Response) {
     Object.entries(generateHeaders(respBody)).forEach(([k, v]) => res.setHeader(k, v));
     return res.status(statusCode).json(respBody);
 }
-
-async function getMapping(req: Request, res: Response) {
-    const route = req.path.split('/')[1];
-    const endpoint = req.params[0];
-    const requestId = req.params.requestId;
-    const mapKey = `request:${route}:${endpoint}:${requestId}`;
-    const raw = await redis.get(mapKey);
-    if (!raw) return res.sendStatus(404);
-    const { request, response } = JSON.parse(raw);
-    return res.status(200).json({ request, response });
-}
-
 
 export function attachCommonRoutes(router: Router, basePath: string): void {
     const path = basePath.endsWith('/') ? basePath.slice(0, -1) : basePath;
