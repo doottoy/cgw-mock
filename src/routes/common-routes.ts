@@ -62,10 +62,12 @@ async function defaultRequest(req: Request, res: Response) {
         respBody = replaceRandomUUID(respBody)
     }
 
-    const reqId = respBody.request_id || (req.body?.body && (req.body.body as any).id)
+    const txId = req.body.data?.tx_id as string | undefined
+    const reqId = txId || respBody.request_id || (req.body?.body && (req.body.body as any).id)
     if (reqId) {
-        await redis.set(`request:${endpoint}:${reqId}`, JSON.stringify({ request: record, response: { status: statusCode, body: respBody } }))
-        await redis.expire(`request:${endpoint}:${reqId}`, HISTORY_TTL)
+        const mapKey = `request:${endpoint}:${reqId}`
+        await redis.set(mapKey, JSON.stringify({ request: record, response: { status: statusCode, body: respBody } }))
+        await redis.expire(mapKey, HISTORY_TTL)
     }
 
     const headers = generateHeaders(respBody)
