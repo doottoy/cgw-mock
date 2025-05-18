@@ -1,0 +1,380 @@
+[
+  {
+    "path": "/exchanger/transactions/authorize",
+    "body": {
+      "status": 201,
+      "response": {
+        "request_id": "randomUUID"
+      }
+    }
+  },
+  {
+    "path": "/exchanger/transactions/process",
+    "body": {
+      "status": 201,
+      "response": {
+        "request_id": "randomUUID"
+      }
+    }
+  },
+  {
+    "path": "/exchanger/transactions/amount-update",
+    "body": {
+      "status": 201,
+      "response": {
+        "request_id": "randomUUID"
+      }
+    }
+  },
+  {
+    "params": {
+      "0": "v1/issuing/applications/user"
+    },
+    "path": "/rain/v1/issuing/applications/user",
+    "body": {
+      "status": 200,
+      "response": {
+        "id": "1",
+        "firstName": "Vasy",
+        "lastName": "PupkinApproved",
+        "email": "test@test.com",
+        "isActive": true,
+        "isTermsOfServiceAccepted": true,
+        "address": {
+          "line1": "Simeonovo",
+          "city": "Sofia",
+          "region": "Lozenets",
+          "postalCode": "1153",
+          "countryCode": "BG",
+          "country": "Bulgaria"
+        },
+        "phoneCountryCode": "1",
+        "phoneNumber": "321321321321",
+        "applicationStatus": "pending",
+        "applicationReason": ""
+      },
+      "method": "post"
+    }
+  },
+  {
+    "params": {
+      "0": "v1/issuing/applications/user/1"
+    },
+    "path": "/rain/v1/issuing/applications/user/1",
+    "body": {
+      "status": 200,
+      "response": {
+        "id": "randomUUID",
+        "firstName": "Vasy",
+        "lastName": "PupkinApproved",
+        "email": "test@test.com",
+        "isActive": true,
+        "isTermsOfServiceAccepted": true,
+        "address": {
+          "line1": "Simeonovo",
+          "city": "Sofia",
+          "region": "Lozenets",
+          "postalCode": "1153",
+          "countryCode": "BG",
+          "country": "Bulgaria"
+        },
+        "phoneCountryCode": "1",
+        "phoneNumber": "321321321321",
+        "applicationStatus": "pending",
+        "applicationReason": ""
+      },
+      "method": "get"
+    }
+  },
+  {
+    "params": {
+      "0": "v1/issuing/users/1/cards"
+    },
+    "path": "/rain/v1/issuing/users/1/cards",
+    "body": {
+      "response": {
+        "id": "1",
+        "userId": "1",
+        "type": "virtual",
+        "status": "active",
+        "limit": {
+          "amount": 50000,
+          "frequency": "per30DayPeriod"
+        },
+        "last4": "0000",
+        "expirationMonth": "6",
+        "expirationYear": "2029"
+      },
+      "status": 200,
+      "method": "post"
+    }
+  },
+  {
+    "params": {
+      "0": "v1/issuing/cards/1"
+    },
+    "path": "/rain/v1/issuing/cards/1",
+    "body": {
+      "response": {
+        "id": "1",
+        "userId": "1",
+        "type": "virtual",
+        "status": "active",
+        "limit": {
+          "amount": 50000,
+          "frequency": "per30DayPeriod"
+        },
+        "last4": "0000",
+        "expirationMonth": "6",
+        "expirationYear": "2029"
+      },
+      "status": 200,
+      "method": "patch"
+    }
+  },
+  {
+    "params": {
+      "0": "v1/issuing/cards/1/pin"
+    },
+    "path": "/rain/v1/issuing/cards/1/pin",
+    "body": {
+      "response": {
+        "id": "1",
+        "userId": "1",
+        "type": "virtual",
+        "status": "active",
+        "limit": {
+          "amount": 50000,
+          "frequency": "per30DayPeriod"
+        },
+        "last4": "0000",
+        "expirationMonth": "6",
+        "expirationYear": "2029"
+      },
+      "status": 200,
+      "method": "put"
+    }
+  },
+  {
+    "params": {
+      "0": "lifecycle/v1/wallet"
+    },
+    "path": "/quicko/lifecycle/v1/wallet",
+    "body": {
+      "response": {
+        "id": 1,
+        "cards": []
+      },
+      "status": 200,
+      "method": "post"
+    }
+  },
+  {
+    "params": {
+      "0": "secure/customers/1/verification"
+    },
+    "path": "/quicko/secure/customers/1/verification",
+    "body": {
+      "response": {
+        "id": "1"
+      },
+      "status": 200,
+      "method": "post"
+    }
+  },
+  {
+    "params": {
+      "0": "secure/customers/1/balances"
+    },
+    "path": "/quicko/secure/customers/1/balances",
+    "body": {
+      "response": {
+        "id": "1",
+        "balance": 0,
+        "currency": "EUR",
+        "description": "My Account",
+        "dcUserId": 12094,
+        "dcCorporationId": null
+      },
+      "status": 200,
+      "method": "post"
+    }
+  },
+  {
+    "params": {
+      "0": "secure/customers/1/balances"
+    },
+    "path": "/quicko/secure/customers/1/balances",
+    "body": {
+      "response": [
+        {
+          "id": "32e81be4-4a26-4faa-9b2e-71da298700d6",
+          "balance": 0,
+          "currency": "EUR",
+          "description": "My Account",
+          "accountingBalance": 0,
+          "customerId": 12094,
+          "dcCorporationId": null,
+          "cards": []
+        }
+      ],
+      "status": 200,
+      "method": "get"
+    }
+  },
+  {
+    "params": {
+      "0": "secure/customers/1/balances/1"
+    },
+    "path": "/quicko/secure/customers/1/balances/1",
+    "body": {
+      "response": {
+        "id": "1",
+        "balance": 0,
+        "currency": "EUR",
+        "description": "My Account",
+        "dcUserId": 12094,
+        "dcCorporationId": null
+      },
+      "status": 200,
+      "method": "get"
+    }
+  },
+  {
+    "params": {
+      "0": "secure/customers/1/balances/1"
+    },
+    "path": "/quicko/secure/customers/1/balances/1",
+    "body": {
+      "response": {
+        "id": "1",
+        "balance": 0,
+        "currency": "EUR",
+        "description": "My Account",
+        "dcUserId": 12094,
+        "dcCorporationId": null
+      },
+      "status": 204,
+      "method": "delete"
+    }
+  },
+  {
+    "params": {
+      "0": "/secure/customers/1/cards/virtual"
+    },
+    "path": "/quicko/secure/customers/1/cards/virtual",
+    "body": {
+      "response": {
+        "payload": "eyJhbGciOiJSU0EtT0FFUC0yNTYiLCJlbmMiOiJBMjU2R0NNIn0.PZ7E3J2mgkT4ETZLnZeNjO0fMcbGTbvznBrcre7Ur2KNwANx_REvDmPlW433B0XfrFnCTsaGkCGBJwprdetTvmKWx7HGwRVyoK92bRF8bsh5qeGOOUDsHdzQw27CHccN_wUX0xUKHVKFqB2YzLoYEt0yt_NJ2BW8em3HIEv_yxpTnEsTpd15fayaOYoRfTioTPCRaA2mOmBXMZvRab0W8P1082lNH5GsYq7ZCabr4FiXVF0IyZFrqZqN-KFLXsJZ4ARppVkgHTSwIW0BQT26a2V9lCmSe3Vfwkk2NTv05S5BDn023ov-cm0kG0OS4DaMa_rdaWsSHXo5-S3-a-qCxq_jEu2tAcpBIpMuP8ZQAMOFrMv9hQT4FTAEMxqaIyAgC8vP2hiNrjmjGSdXGpdTvPn-OmjCsnmGqBmFEPuIE54hrS_Y_XZCwOKPRScg8yo766ccbF5CijCgMw8zmYeTshSdmnMn21y4dGTGrzpc1cE66wnxcckEuMoaj-crqR95oARKfoIZ3UV-FCqV1wCbN1ASpkFm2SIFpG5hbDIr4tGu8bO45pkWgWL9iC-wGVqbuoEtwoJCLfPkHMKfDBiJr20WsgDOvvFt-oyfoT2wkaIlCuM6WrbIOC0VwUE7LCLINqsVI1Y_GS07rmTZoFhWyiq1OWRDlTH8tIAOCT6F4Gk.-2zFHYRcT9wL-WzP.DfrREKI3FJ2gDV0mlU2aNzKzYeow5uevK6F3CpRbIek8Q3zOW5HyDkPQQLOoyIQjMO2TBuSwF03QJTDFfm9LIGDTNrLOdGi5uPZDzqPAvfSdcmMrSkt1eBWHtz9rFNb03AI0gFwb_1rxt-oSLNy0lqRbrVIdpoKWoOFdj4LZ_4Aa152RxM18FiewG6Seug.6nPmbgvSpefWiVhFCDhJYA"
+      },
+      "status": 200,
+      "method": "post"
+    }
+  },
+  {
+    "params": {
+      "0": "/secure/customers/1/cards/1/lock"
+    },
+    "path": "/quicko/secure/customers/1/cards/1/lock",
+    "body": {
+      "response": {},
+      "status": 204,
+      "method": "post"
+    }
+  },
+  {
+    "params": {
+      "0": "/secure/customers/1/cards/1/unlock"
+    },
+    "path": "/quicko/secure/customers/1/cards/1/unlock",
+    "body": {
+      "response": {},
+      "status": 204,
+      "method": "post"
+    }
+  },
+  {
+    "params": {
+      "0": "/secure/cards/1/limits"
+    },
+    "path": "/quicko/secure/cards/1/limits",
+    "body": {
+      "response": [],
+      "status": 200,
+      "method": "get"
+    }
+  },
+  {
+    "params": {
+      "0": "/secure/cards/1/limits"
+    },
+    "path": "/quicko/secure/cards/1/limits",
+    "body": {
+      "response": {
+        "id": "1",
+        "type": "TRX_ALL",
+        "maxAmount": 10,
+        "maxAttempts": null,
+        "period": "DAILY",
+        "expiration": "2025-02-28 00:00:00",
+        "currency": "EUR",
+        "mcc_list": []
+      },
+      "status": 200,
+      "method": "post"
+    }
+  },
+  {
+    "params": {
+      "0": "/secure/cards/1/limits/1"
+    },
+    "path": "/quicko/secure/cards/1/limits/1",
+    "body": {
+      "response": {},
+      "status": 204,
+      "method": "delete"
+    }
+  },
+  {
+    "params": {
+      "0": "/secure/cards/1/limits"
+    },
+    "path": "/quicko/secure/cards/1/limits",
+    "body": {
+      "response": {
+        "id": "1",
+        "type": "TRX_ALL",
+        "maxAmount": 10,
+        "maxAttempts": null,
+        "period": "DAILY",
+        "expiration": "2025-02-28 00:00:00",
+        "currency": "EUR",
+        "mcc_list": []
+      },
+      "status": 200,
+      "method": "patch"
+    }
+  },
+  {
+    "params": {
+      "0": "/secure/cards/1"
+    },
+    "path": "/quicko/secure/cards/1",
+    "body": {
+      "response": {},
+      "status": 204,
+      "method": "delete"
+    }
+  },
+  {
+    "params": {
+      "0": "/secure/customers/1/cards/1/pin"
+    },
+    "path": "/quicko/secure/customers/1/cards/1/pin",
+    "body": {
+      "response": {},
+      "status": 204,
+      "method": "post"
+    }
+  }
+]
