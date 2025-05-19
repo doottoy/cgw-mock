@@ -1,16 +1,15 @@
 /* External dependencies */
-import fs from 'fs/promises';
+import { readFile } from 'fs/promises';
 import path from 'path';
 import dotenv from 'dotenv';
-import express from 'express';
+import express, { Request } from 'express';
 
 /* Internal dependencies */
 import { redis } from './redis';
+import { loggingMiddleware, getRedisStubKey } from './utility/common';
 import rainRoute from './routes/rain';
 import quickoRoute from './routes/quicko';
 import exchangeRoute from './routes/exchanger';
-import { makeStubKey } from './utility/redisKeys';
-import { loggingMiddleware } from './utility/common';
 
 dotenv.config();
 
@@ -19,15 +18,14 @@ app.use(express.json());
 app.use(loggingMiddleware);
 app.use(exchangeRoute, rainRoute, quickoRoute);
 
-async function seedStubs() {
-    const configPath = path.resolve(__dirname, '../src/config/stubs.json');
-    let stubs: Array<{
-        path: string;
-        body: { status: number; response: any; method?: string };
-        params?: Record<'0', string>;
-    }> = [];
+const methods = ['get', 'post', 'put', 'delete', 'patch'];
+
+async function seedStubs(configFilePath?: string): Promise<void> {
+    const filePath = configFilePath || path.resolve(__dirname, '../config/stubs.json');
+    let stubs: any[] = [];
+
     try {
-        const raw = await fs.readFile(configPath, 'utf-8');
+        const raw = await readFile(filePath, 'utf-8');
         stubs = JSON.parse(raw);
     } catch (err) {
         console.error('Failed to read stubs.json:', err);
@@ -35,12 +33,18 @@ async function seedStubs() {
     }
 
     for (const stub of stubs) {
-        const [, route, ...parts] = stub.path.split('/');
-        const endpoint = stub.params?.['0'] ?? parts.join('/');
-        const method = stub.body.method?.toLowerCase() || 'post';
-        const key = makeStubKey(route, endpoint, method);
+        const method = stub.body.method && methods.includes(stub.body.method.toLowerCase())
+            ? stub.body.method.toLowerCase()
+            : 'post';
+
+        const fakeReq = { path: stub.path, params: stub.params || {} } as Request;
+        const key = getRedisStubKey(fakeReq, method);
+
         try {
-            await redis.set(key, JSON.stringify({ status: stub.body.status, response: stub.body.response }));
+            await redis.set(key, JSON.stringify({
+                status: stub.body.status,
+                response: stub.body.response,
+            }));
             console.log('Seeded stub', stub.path);
         } catch (err) {
             console.error(`Failed to seed stub ${stub.path}:`, err);
