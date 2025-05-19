@@ -1,5 +1,8 @@
 [
   {
+    "params": {
+      "0": "transactions/authorize"
+    },
     "path": "/exchanger/transactions/authorize",
     "body": {
       "status": 201,
@@ -9,6 +12,9 @@
     }
   },
   {
+    "params": {
+      "0": "transactions/process"
+    },
     "path": "/exchanger/transactions/process",
     "body": {
       "status": 201,
@@ -18,6 +24,9 @@
     }
   },
   {
+    "params": {
+      "0": "transactions/amount-update"
+    },
     "path": "/exchanger/transactions/amount-update",
     "body": {
       "status": 201,

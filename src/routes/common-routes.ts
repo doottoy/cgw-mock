@@ -142,8 +142,8 @@ async function defaultRequest(req: Request, res: Response): Promise<Response> {
 
 export function attachCommonRoutes(router: Router, basePath: string): void {
     router.post(`${basePath}/set/*`, saveNewEndpointToRedis);
-    router.delete(`${basePath}/delete/*/:method`, deleteEndpointFromRedis);
-    router.get(`${basePath}/history/*/:method`, getHistory);
+    router.delete(`${basePath}/delete/*/:method?`, deleteEndpointFromRedis);
+    router.get(`${basePath}/history/*/:method?`, getHistory);
     router.get(`${basePath}/stub-list`, getStubList);
     router.get(`${basePath}/*/state`, getStubState);
     router.get(`${basePath}/*/:txId`, getMappingByTxId);
