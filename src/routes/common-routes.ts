@@ -4,12 +4,16 @@ import { Router, Request, Response } from 'express';
 
 /* Internal dependencies */
 import { redis } from '../redis';
-import { replaceRandomUUID, generateHeaders, getRedisHistoryKey, getRedisStubKey } from '../utility/common';
+import { getRedisHistoryKey, getRedisStubKey } from '../utility/redis';
+import { replaceRandomUUID, generateHeaders } from '../utility/common';
 
 const methods = ['get', 'post', 'put', 'delete', 'patch'];
 
 /**
  * Create or update a stub in Redis
+ * @param req Express Request object. Expects req.body.status (number), req.body.response (object), and optional req.body.method
+ * @param res Express Response object
+ * @returns A Response with JSON { result: 'created'|'updated', endpoint: string }
  */
 async function saveNewEndpointToRedis(
     req: Request,
@@ -31,6 +35,9 @@ async function saveNewEndpointToRedis(
 
 /**
  * Delete a stub from Redis
+ * @param req Express Request. Uses req.params.method to determine HTTP method, defaults to 'post'
+ * @param res Express Response
+ * @returns 204 No Content if deleted, or 404 Not Found if no stub existed
  */
 async function deleteEndpointFromRedis(
     req: Request,
@@ -48,7 +55,10 @@ async function deleteEndpointFromRedis(
 }
 
 /**
- * Retrieve last 5 requests for a stub endpoint
+ * Retrieve the last 5 requests for a stub endpoint
+ * @param req Express Request. Uses req.params.method to select history list key
+ * @param res Express Response
+ * @returns JSON array of request records
  */
 async function getHistory(
     req: Request,
@@ -67,6 +77,9 @@ async function getHistory(
 
 /**
  * List all configured stubs (global or per service)
+ * @param req Express Request. If URL is '/stub-list', returns all; otherwise filters by service
+ * @param res Express Response
+ * @returns JSON array of stub definitions
  */
 async function getStubList(
     req: Request,
@@ -98,7 +111,10 @@ async function getStubList(
 }
 
 /**
- * Retrieve request-response mapping by txId
+ * Retrieve request-response mapping by transaction ID
+ * @param req Express Request. Parses service, endpoint, and txId from URL
+ * @param res Express Response
+ * @returns JSON { request, response } or 404 if not found
  */
 async function getMappingByTxId(
     req: Request,
@@ -118,7 +134,10 @@ async function getMappingByTxId(
 }
 
 /**
- * Retrieve stub state for default method (POST)
+ * Retrieve the stub configuration state for the default (POST) method
+ * @param req Express Request. Uses req.params[0] for endpoint
+ * @param res Express Response
+ * @returns JSON { endpoint, status, response } or 404 if stub not found
  */
 async function getStubState(
     req: Request,
@@ -134,7 +153,10 @@ async function getStubState(
 }
 
 /**
- * Default handler for all other requests
+ * Default handler for all other requests: records history, applies stub, maps txId, signs, and responds
+ * @param req Express Request with arbitrary path under basePath
+ * @param res Express Response
+ * @returns Stubbed or default JSON response
  */
 async function defaultRequest(
     req: Request,
@@ -180,15 +202,17 @@ async function defaultRequest(
 }
 
 /**
- * Attach all common routes to a router under a base path
+ * Attach all common routes to a router under a given base path
+ * @param router Express Router to attach routes to
+ * @param basePath Base URL path for the service
  */
 export function attachCommonRoutes(router: Router, basePath: string): void {
-    router.get('/stub-list', getStubList);
     router.post(`${basePath}/set/*`, saveNewEndpointToRedis);
     router.delete(`${basePath}/delete/*/:method?`, deleteEndpointFromRedis);
     router.get(`${basePath}/history/*/:method?`, getHistory);
+    router.get(new RegExp(`^${basePath}/(.+)/([^/]+)$`), getMappingByTxId);
+    router.get('/stub-list', getStubList);
     router.get(`${basePath}/stub-list`, getStubList);
     router.get(`${basePath}/*/state`, getStubState);
-    router.get(new RegExp(`^${basePath}/(.+)/([^/]+)$`), getMappingByTxId);
     router.all(`${basePath}/*`, defaultRequest);
 }

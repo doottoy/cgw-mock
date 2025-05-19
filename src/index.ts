@@ -1,12 +1,13 @@
 /* External dependencies */
-import fs from 'fs';
-import path from 'path';
 import dotenv from 'dotenv';
-import express, { Request } from 'express';
+import express from 'express';
 
 /* Internal dependencies */
 import { redis } from './redis';
-import { loggingMiddleware, getRedisStubKey } from './utility/common';
+import { seedStubs } from './utility/seed';
+import { loggingMiddleware } from './utility/common';
+
+/* Route */
 import rainRoute from './routes/rain';
 import quickoRoute from './routes/quicko';
 import exchangeRoute from './routes/exchanger';
@@ -18,40 +19,8 @@ app.use(express.json());
 app.use(loggingMiddleware);
 app.use(exchangeRoute, rainRoute, quickoRoute);
 
-const methods = ['get', 'post', 'put', 'delete', 'patch'];
-
-async function seedStubs(configFilePath?: string): Promise<void> {
-    const filePath = path.resolve(__dirname, '../src/config/stubs.json');
-    let stubs: Array<Request> = [];
-    try {
-        const raw = fs.readFileSync(filePath, 'utf-8');
-        stubs = JSON.parse(raw);
-    } catch (err) {
-        console.error(('Failed to read stubs.json:'), err);
-        return;
-    }
-
-    for (const stub of stubs) {
-        const method = stub.body.method && methods.includes(stub.body.method.toLowerCase())
-            ? stub.body.method.toLowerCase()
-            : 'post';
-
-        const fakeReq = { path: stub.path, params: stub.params || {} } as Request;
-        const key = getRedisStubKey(fakeReq, method);
-
-        try {
-            await redis.set(key, JSON.stringify({
-                status: stub.body.status,
-                response: stub.body.response,
-            }));
-            console.log('Seeded stub', stub.path);
-        } catch (err) {
-            console.error(`Failed to seed stub ${stub.path}:`, err);
-        }
-    }
-}
-
 const PORT = process.env.PORT || 3000;
+
 app.listen(PORT, async () => {
     console.log(`Server listening on port ${PORT}`);
     try {
