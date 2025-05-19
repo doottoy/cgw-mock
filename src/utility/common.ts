@@ -10,7 +10,7 @@ export function loggingMiddleware(req: Request, res: Response, next: NextFunctio
     const startTimestamp = new Date(startTime).toISOString();
     const { method, originalUrl } = req;
 
-    console.groupCollapsed(`⚡  [${requestId}][${startTimestamp}] ${method} ${originalUrl}`);
+    console.groupCollapsed(`⚡ [${requestId}][${startTimestamp}] ${method} ${originalUrl}`);
     console.log(` [${requestId}] Request Headers:`, util.inspect(JSON.stringify(req.headers), { depth: null }));
     console.log(` [${requestId}] Request Body:   `, util.inspect(JSON.stringify(req.body), { depth: null }));
     console.groupEnd();
