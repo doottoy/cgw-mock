@@ -1,5 +1,5 @@
 /* External dependencies */
-import { readFile } from 'fs/promises';
+import fs from 'fs';
 import path from 'path';
 import dotenv from 'dotenv';
 import express, { Request } from 'express';
@@ -21,14 +21,13 @@ app.use(exchangeRoute, rainRoute, quickoRoute);
 const methods = ['get', 'post', 'put', 'delete', 'patch'];
 
 async function seedStubs(configFilePath?: string): Promise<void> {
-    const filePath = configFilePath || path.resolve(__dirname, '../config/stubs.json');
-    let stubs: any[] = [];
-
+    const filePath = path.resolve(__dirname, '../src/config/stubs.json');
+    let stubs: Array<Request> = [];
     try {
-        const raw = await readFile(filePath, 'utf-8');
+        const raw = fs.readFileSync(filePath, 'utf-8');
         stubs = JSON.parse(raw);
     } catch (err) {
-        console.error('Failed to read stubs.json:', err);
+        console.error(('Failed to read stubs.json:'), err);
         return;
     }
 
