@@ -125,7 +125,8 @@ async function getStubList(req: Request, res: Response): Promise<Response> {
 
     const patternEntries = await redis.hgetall('patternStubs');
     for (const field in patternEntries) {
-        const [pattern] = field.split(':');
+        const pattern = field.substring(field.indexOf(':') + 1);
+
         if (isGlobal || pattern.startsWith(`/${route}/`)) {
             const { status, response } = JSON.parse(patternEntries[field]);
 
@@ -133,7 +134,12 @@ async function getStubList(req: Request, res: Response): Promise<Response> {
 
             if (isGlobal) {
                 const [ , r, ...rest ] = pattern.split('/');
-                stubs.push({ route: r, endpoint: rest.join('/'), status, response });
+                stubs.push({
+                    route: r,
+                    endpoint: rest.join('/'),
+                    status,
+                    response
+                });
             } else {
                 stubs.push({ endpoint, status, response });
             }
