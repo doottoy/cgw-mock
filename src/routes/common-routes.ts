@@ -128,13 +128,14 @@ async function getStubList(req: Request, res: Response): Promise<Response> {
         const [pattern] = field.split(':');
         if (isGlobal || pattern.startsWith(`/${route}/`)) {
             const { status, response } = JSON.parse(patternEntries[field]);
+
+            const endpoint = pattern.replace(new RegExp(`^/${route}/`), '');
+
             if (isGlobal) {
-                const parts = pattern.split('/');
-                const r = parts[1] || '';
-                const endpoint = parts.slice(2).join('/');
-                stubs.push({ route: r, endpoint, status, response });
+                const [ , r, ...rest ] = pattern.split('/');
+                stubs.push({ route: r, endpoint: rest.join('/'), status, response });
             } else {
-                stubs.push({ pattern, status, response });
+                stubs.push({ endpoint, status, response });
             }
         }
     }
