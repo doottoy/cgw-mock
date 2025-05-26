@@ -6,11 +6,14 @@ import { Router, Request, Response } from 'express';
 import { redis } from '../redis';
 import { getRedisHistoryKey, getRedisStubKey } from '../utility/redis';
 import { replaceRandomUUID, generateHeaders } from '../utility/common';
+import { patternStubs, addPatternStub, removePatternStub } from '../utility/pattern-stubs';
 
 const methods = ['get', 'post', 'put', 'delete', 'patch'];
 
 /**
- * Create or update a stub in Redis
+ * * Create or update a stub (static or pattern)
+ * - static: stored by key in Redis
+ * - pattern: stored in Redis hash + memory cache
  * @param req Express Request object. Expects req.body.status (number), req.body.response (object), and optional req.body.method
  * @param res Express Response object
  * @returns A Response with JSON { result: 'created'|'updated', endpoint: string }
@@ -19,18 +22,26 @@ async function saveNewEndpointToRedis(
     req: Request,
     res: Response
 ): Promise<Response> {
-    let currentMethod = 'post';
     const { status, response: resp, method } = req.body;
     if (typeof status !== 'number' || typeof resp !== 'object') {
         return res.status(400).json({ error: 'status (number), response (object) required' });
     }
-    if (method && methods.includes(method.toLowerCase())) {
-        currentMethod = method.toLowerCase();
+    const currentMethod = method && methods.includes(method.toLowerCase()) ? method.toLowerCase() : 'post';
+
+    const endpointPattern = req.params[0];
+    const stubPath = `${req.baseUrl}/${endpointPattern}`;
+
+    if (stubPath.includes('/:')) {
+        const field = `${currentMethod}:${stubPath}`;
+        const existed = await redis.hexists('patternStubs', field);
+        await addPatternStub(stubPath, { status, response: resp }, currentMethod);
+        return res.status(existed ? 200 : 201).json({ result: existed ? 'updated' : 'created', endpoint: endpointPattern });
     }
+
     const key = getRedisStubKey(req, currentMethod);
-    const existed = await redis.exists(key);
+    const existedStatic = await redis.exists(key);
     await redis.set(key, JSON.stringify({ status, response: resp }));
-    return res.status(existed ? 200 : 201).json({ result: existed ? 'updated' : 'created', endpoint: req.params[0] });
+    return res.status(existedStatic ? 200 : 201).json({ result: existedStatic ? 'updated' : 'created', endpoint: endpointPattern });
 }
 
 /**
@@ -43,13 +54,23 @@ async function deleteEndpointFromRedis(
     req: Request,
     res: Response
 ): Promise<Response> {
-    const methodParam = req.params.method;
-    const currentMethod = methodParam && methods.includes(methodParam.toLowerCase()) ? methodParam.toLowerCase() : 'post';
-    const key = getRedisStubKey(req, currentMethod);
-    const existed = await redis.exists(key);
-    if (!existed) {
-        return res.sendStatus(404);
+    const methodParam = (req.query.method as string) || 'post';
+    const currentMethod = methods.includes(methodParam.toLowerCase()) ? methodParam.toLowerCase() : 'post';
+
+    const endpointPattern = req.params[0];
+    const stubPath = `${req.baseUrl}/${endpointPattern}`;
+
+    if (stubPath.includes('/:')) {
+        const field = `${currentMethod}:${stubPath}`;
+        const existed = await redis.hexists('patternStubs', field);
+        if (!existed) return res.sendStatus(404);
+        await removePatternStub(stubPath, currentMethod);
+        return res.sendStatus(204);
     }
+
+    const key = getRedisStubKey(req, currentMethod);
+    const existedStatic = await redis.exists(key);
+    if (!existedStatic) return res.sendStatus(404);
     await redis.del(key);
     return res.sendStatus(204);
 }
@@ -64,14 +85,13 @@ async function getHistory(
     req: Request,
     res: Response
 ): Promise<Response> {
-    const methodParam = req.params.method;
-    const currentMethod =
-        methodParam && methods.includes(methodParam.toLowerCase())
-            ? methodParam.toLowerCase()
-            : 'post';
+    const methodParam = (req.query.method as string) || 'post';
+    const currentMethod = methods.includes(methodParam.toLowerCase())
+        ? methodParam.toLowerCase()
+        : 'post';
     const histKey = getRedisHistoryKey(req, currentMethod);
     const items = await redis.lrange(histKey, 0, 4);
-    const records = items.map((item) => JSON.parse(item));
+    const records = items.map(item => JSON.parse(item));
     return res.status(200).json(records);
 }
 
@@ -86,14 +106,11 @@ async function getStubList(
     res: Response
 ): Promise<Response> {
     const isGlobal = req.originalUrl === '/stub-list';
-    let keys: string[];
-    if (isGlobal) {
-        keys = await redis.keys('stub:*');
-    } else {
-        const route = req.path.split('/')[1];
-        keys = await redis.keys(`stub:${route}:*`);
-    }
-    const stubs: Array<any> = [];
+    const keys = isGlobal
+        ? await redis.keys('stub:*')
+        : await redis.keys(`stub:${req.path.split('/')[1]}:*`);
+
+    const stubs: any[] = [];
     for (const key of keys) {
         const raw = await redis.get(key);
         if (!raw) continue;
@@ -162,8 +179,6 @@ async function defaultRequest(
     req: Request,
     res: Response
 ): Promise<Response> {
-    const route = req.path.split('/')[1];
-    const endpoint = req.params[0];
     const method = req.method.toLowerCase();
 
     const histKey = getRedisHistoryKey(req, method);
@@ -173,32 +188,37 @@ async function defaultRequest(
     await redis.expire(histKey, 30 * 24 * 3600);
 
     const stubKey = getRedisStubKey(req, method);
-    const raw = await redis.get(stubKey);
-    let statusCode = 200;
-    let respBody: any = {};
-    if (raw) {
-        const parsed = JSON.parse(raw);
-        statusCode = parsed.status;
-        respBody = parsed.response;
+    const rawStatic = await redis.get(stubKey);
+    if (rawStatic) {
+        const { status, response } = JSON.parse(rawStatic);
+        let respBody = response;
         if (respBody.request_id === 'randomUUID') {
             respBody.request_id = req.body.request_id || uuidv4();
         }
         respBody = replaceRandomUUID(respBody);
+        const headers = generateHeaders(respBody);
+        Object.entries(headers).forEach(([k, v]) => res.setHeader(k, v));
+        return res.status(status).json(respBody);
     }
 
-    const txId = (req.body?.data as any)?.tx_id as string | undefined;
-    if (txId) {
-        const mapKey = `request:${route}:${endpoint}:${txId}`;
-        await redis.set(
-            mapKey,
-            JSON.stringify({ request: record, response: { status: statusCode, body: respBody } })
-        );
-        await redis.expire(mapKey, 30 * 24 * 3600);
+    for (const { matcher, data, method: stubMethod } of patternStubs) {
+        if (stubMethod !== method) continue;
+        const m = matcher(req.path);
+        if (m) {
+            const params = m.params;
+            let respBody = JSON.parse(JSON.stringify(data.response));
+            const substituted = JSON.stringify(respBody).replace(
+                /\{\{(\w+)\}\}/g,
+                (_, name) => params[name] || ''
+            );
+            respBody = JSON.parse(substituted);
+            const headers = generateHeaders(respBody);
+            Object.entries(headers).forEach(([k, v]) => res.setHeader(k, v));
+            return res.status(data.status).json(respBody);
+        }
     }
 
-    const headers = generateHeaders(respBody);
-    Object.entries(headers).forEach(([name, value]) => res.setHeader(name, value));
-    return res.status(statusCode).json(respBody);
+    return res.status(404).json({ error: `No stub for ${req.method} ${req.path}` });
 }
 
 /**
@@ -208,8 +228,8 @@ async function defaultRequest(
  */
 export function attachCommonRoutes(router: Router, basePath: string): void {
     router.post(`${basePath}/set/*`, saveNewEndpointToRedis);
-    router.delete(`${basePath}/delete/*/:method?`, deleteEndpointFromRedis);
-    router.get(`${basePath}/history/*/:method?`, getHistory);
+    router.delete(`${basePath}/delete/*`, deleteEndpointFromRedis);
+    router.get(`${basePath}/history/*`, getHistory);
     router.get(new RegExp(`^${basePath}/(.+)/([^/]+)$`), getMappingByTxId);
     router.get('/stub-list', getStubList);
     router.get(`${basePath}/stub-list`, getStubList);

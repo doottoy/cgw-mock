@@ -385,5 +385,19 @@
       "status": 204,
       "method": "post"
     }
+  },
+  {
+    "params": {
+      "0": "/issuing/user/:userId/card/:cardId/do-something"
+    },
+    "path": "/quicko/issuing/user/:userId/card/:cardId/do-something",
+    "body": {
+      "status": 204,
+      "method": "post",
+      "response": {
+        "user": "{{userId}}",
+        "card": "{{cardId}}"
+      }
+    }
   }
 ]

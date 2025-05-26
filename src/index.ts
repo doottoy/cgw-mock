@@ -6,6 +6,7 @@ import express from 'express';
 import { redis } from './redis';
 import { seedStubs } from './utility/seed';
 import { loggingMiddleware } from './utility/common';
+import { loadPatternStubs } from './utility/pattern-stubs';
 
 /* Route */
 import rainRoute from './routes/rain';
@@ -27,6 +28,7 @@ app.listen(PORT, async () => {
         await redis.ping();
         console.log('Redis connected');
         await seedStubs();
+        await loadPatternStubs();
     } catch (err) {
         console.error('Redis connection error:', err);
         process.exit(1);
