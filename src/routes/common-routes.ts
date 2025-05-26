@@ -1,57 +1,54 @@
+/* External dependencies */
 import { v4 as uuidv4 } from 'uuid';
 import { Router, Request, Response } from 'express';
 
+/* Internal dependencies */
 import { redis } from '../redis';
+import { patternToRedisWildcard } from '../utility/pattern-stubs';
 import { getRedisStubKey, getRedisHistoryKey } from '../utility/redis';
 import { replaceRandomUUID, generateHeaders } from '../utility/common';
 import { patternStubs, addPatternStub, removePatternStub } from '../utility/pattern-stubs';
 
 const methods = ['get', 'post', 'put', 'delete', 'patch'];
 
-// Helper to convert a path pattern like "/foo/:id/bar" into a Redis wildcard "*/bar"
-function patternToRedisWildcard(pattern: string): string {
-    return pattern.replace(/:\w+/g, '*');
-}
-
-/** Create or update a stub (static or pattern) */
+/**
+ * Create or update a stub in Redis
+ * @param req Express Request object. Expects req.body.status (number), req.body.response (object), and optional req.body.method
+ * @param res Express Response object
+ * @returns A Response with JSON { result: 'created'|'updated', endpoint: string }
+ */
 async function saveNewEndpointToRedis(req: Request, res: Response): Promise<Response> {
     const { status, response: resp, method } = req.body;
     if (typeof status !== 'number' || typeof resp !== 'object') {
         return res.status(400).json({ error: 'status (number), response (object) required' });
     }
 
-    const currentMethod = method && methods.includes(method.toLowerCase())
-        ? method.toLowerCase()
-        : 'post';
-
+    const currentMethod = method && methods.includes(method.toLowerCase()) ? method.toLowerCase() : 'post';
     const endpointPattern = req.params[0];
     const stubPath = `${req.baseUrl}/${endpointPattern}`;
 
     if (stubPath.includes('/:')) {
-        // Pattern stub
         const field = `${currentMethod}:${stubPath}`;
         const existed = await redis.hexists('patternStubs', field);
         await addPatternStub(stubPath, { status, response: resp }, currentMethod);
-        return res
-            .status(existed ? 200 : 201)
-            .json({ result: existed ? 'updated' : 'created', endpoint: endpointPattern });
+        return res.status(existed ? 200 : 201).json({ result: existed ? 'updated' : 'created', endpoint: endpointPattern });
     }
 
-    // Static stub
     const key = getRedisStubKey(req, currentMethod);
     const existedStatic = await redis.exists(key);
     await redis.set(key, JSON.stringify({ status, response: resp }));
-    return res
-        .status(existedStatic ? 200 : 201)
-        .json({ result: existedStatic ? 'updated' : 'created', endpoint: endpointPattern });
+    return res.status(existedStatic ? 200 : 201).json({ result: existedStatic ? 'updated' : 'created', endpoint: endpointPattern });
 }
 
-/** Delete a stub (static or pattern) */
+/**
+ * Delete a stub from Redis
+ * @param req Express Request. Uses req.params.method to determine HTTP method, defaults to 'post'
+ * @param res Express Response
+ * @returns 204 No Content if deleted, or 404 Not Found if no stub existed
+ */
 async function deleteEndpointFromRedis(req: Request, res: Response): Promise<Response> {
     const methodParam = (req.query.method as string) || 'post';
-    const currentMethod = methods.includes(methodParam.toLowerCase())
-        ? methodParam.toLowerCase()
-        : 'post';
+    const currentMethod = methods.includes(methodParam.toLowerCase()) ? methodParam.toLowerCase() : 'post';
 
     const endpointPattern = req.params[0];
     const stubPath = `${req.baseUrl}/${endpointPattern}`;
@@ -64,7 +61,6 @@ async function deleteEndpointFromRedis(req: Request, res: Response): Promise<Res
         return res.sendStatus(204);
     }
 
-    // Static delete
     const key = getRedisStubKey(req, currentMethod);
     const existedStatic = await redis.exists(key);
     if (!existedStatic) return res.sendStatus(404);
@@ -72,23 +68,24 @@ async function deleteEndpointFromRedis(req: Request, res: Response): Promise<Res
     return res.sendStatus(204);
 }
 
-/** Retrieve last 5 request histories, supporting patterns */
+/**
+ * Retrieve the last 5 requests for a stub endpoint
+ * @param req Express Request. Uses req.params.method to select history list key
+ * @param res Express Response
+ * @returns JSON array of request records
+ */
 async function getHistory(req: Request, res: Response): Promise<Response> {
     const methodParam = (req.query.method as string) || 'post';
-    const currentMethod = methods.includes(methodParam.toLowerCase())
-        ? methodParam.toLowerCase()
-        : 'post';
+    const currentMethod = methods.includes(methodParam.toLowerCase()) ? methodParam.toLowerCase() : 'post';
 
     const route = req.path.split('/')[1];
     const endpointPattern = req.params[0];
     let keys: string[];
 
     if (endpointPattern.includes('/:')) {
-        // Pattern: collect all matching history lists
         const wildcard = patternToRedisWildcard(endpointPattern);
         keys = await redis.keys(`history:${route}:${wildcard}:${currentMethod}`);
     } else {
-        // Static
         keys = [getRedisHistoryKey(req, currentMethod)];
     }
 
@@ -100,15 +97,17 @@ async function getHistory(req: Request, res: Response): Promise<Response> {
     return res.status(200).json(records);
 }
 
-/** List all configured stubs, including pattern-based */
+/**
+ * List all configured stubs (global or per service)
+ * @param req Express Request. If URL is '/stub-list', returns all; otherwise filters by service
+ * @param res Express Response
+ * @returns JSON array of stub definitions
+ */
 async function getStubList(req: Request, res: Response): Promise<Response> {
     const isGlobal = req.originalUrl === '/stub-list';
     const route = isGlobal ? '' : req.path.split('/')[1];
 
-    // Static stubs
-    const staticKeys = isGlobal
-        ? await redis.keys('stub:*')
-        : await redis.keys(`stub:${route}:*`);
+    const staticKeys = isGlobal ? await redis.keys('stub:*') : await redis.keys(`stub:${route}:*`);
     const stubs: any[] = [];
 
     for (const key of staticKeys) {
@@ -124,10 +123,9 @@ async function getStubList(req: Request, res: Response): Promise<Response> {
         }
     }
 
-    // Pattern stubs
     const patternEntries = await redis.hgetall('patternStubs');
     for (const field in patternEntries) {
-        const [method, pattern] = field.split(':');
+        const [pattern] = field.split(':');
         if (isGlobal || pattern.startsWith(`/${route}/`)) {
             const { status, response } = JSON.parse(patternEntries[field]);
             if (isGlobal) {
@@ -136,8 +134,7 @@ async function getStubList(req: Request, res: Response): Promise<Response> {
                 const endpoint = parts.slice(2).join('/');
                 stubs.push({ route: r, endpoint, status, response });
             } else {
-                const endpoint = pattern.slice(route.length + 2); // remove "/<route>/"
-                stubs.push({ endpoint, status, response });
+                stubs.push({ pattern, status, response });
             }
         }
     }
@@ -145,7 +142,12 @@ async function getStubList(req: Request, res: Response): Promise<Response> {
     return res.status(200).json(stubs);
 }
 
-/** Retrieve request-response mapping by transaction ID */
+/**
+ * Retrieve request-response mapping by transaction ID
+ * @param req Express Request. Parses service, endpoint, and txId from URL
+ * @param res Express Response
+ * @returns JSON { request, response } or 404 if not found
+ */
 async function getMappingByTxId(req: Request, res: Response): Promise<Response> {
     const parts = req.originalUrl.split('?')[0].split('/');
     const route = parts[1];
@@ -158,13 +160,17 @@ async function getMappingByTxId(req: Request, res: Response): Promise<Response> 
     return res.status(200).json({ request, response });
 }
 
-/** Retrieve stub state (static or pattern) for POST */
+/**
+ * Retrieve the stub configuration state for the default (POST) method
+ * @param req Express Request. Uses req.params[0] for endpoint
+ * @param res Express Response
+ * @returns JSON { endpoint, status, response } or 404 if stub not found
+ */
 async function getStubState(req: Request, res: Response): Promise<Response> {
     const endpointPattern = req.params[0];
     const stubPath = `${req.baseUrl}/${endpointPattern}`;
 
     if (stubPath.includes('/:')) {
-        // Pattern stub state
         const field = `post:${stubPath}`;
         const raw = await redis.hget('patternStubs', field);
         if (!raw) return res.sendStatus(404);
@@ -172,7 +178,6 @@ async function getStubState(req: Request, res: Response): Promise<Response> {
         return res.status(200).json({ endpoint: endpointPattern, status, response });
     }
 
-    // Static stub state
     const key = getRedisStubKey(req, 'post');
     const raw = await redis.get(key);
     if (!raw) return res.sendStatus(404);
@@ -180,19 +185,22 @@ async function getStubState(req: Request, res: Response): Promise<Response> {
     return res.status(200).json({ endpoint: endpointPattern, status, response });
 }
 
-/** Default handler: record history → static stub → pattern stub → map by tx → 404 */
+/**
+ * Default handler for all other requests: records history, applies stub, maps txId, signs, and responds
+ * @param req Express Request with arbitrary path under basePath
+ * @param res Express Response
+ * @returns Stubbed or default JSON response
+ */
 async function defaultRequest(req: Request, res: Response): Promise<Response> {
     const method = req.method.toLowerCase();
     const route = req.path.split('/')[1];
 
-    // 1) record history
     const histKey = getRedisHistoryKey(req, method);
     const record = { timestamp: new Date().toISOString(), method, body: req.body };
     await redis.lpush(histKey, JSON.stringify(record));
     await redis.ltrim(histKey, 0, 4);
     await redis.expire(histKey, 30 * 24 * 3600);
 
-    // 2) static stub lookup
     const stubKey = getRedisStubKey(req, method);
     const rawStatic = await redis.get(stubKey);
     if (rawStatic) {
@@ -203,14 +211,10 @@ async function defaultRequest(req: Request, res: Response): Promise<Response> {
         }
         respBody = replaceRandomUUID(respBody);
 
-        // map by txId if present
         const txId = (req.body?.data as any)?.tx_id as string | undefined;
         if (txId) {
             const mapKey = `request:${route}:${req.params[0]}:${txId}`;
-            await redis.set(
-                mapKey,
-                JSON.stringify({ request: record, response: { status, body: respBody } })
-            );
+            await redis.set(mapKey, JSON.stringify({ request: record, response: { status, body: respBody } }));
             await redis.expire(mapKey, 30 * 24 * 3600);
         }
 
@@ -219,25 +223,18 @@ async function defaultRequest(req: Request, res: Response): Promise<Response> {
         return res.status(status).json(respBody);
     }
 
-    // 3) pattern stub lookup
     for (const { matcher, data, method: stubMethod } of patternStubs) {
         if (stubMethod !== method) continue;
-        const m = matcher(req.path);
-        if (m) {
-            const params = m.params;
+        const match = matcher(req.path);
+        if (match) {
+            const params = match.params;
             let respBody = JSON.parse(JSON.stringify(data.response));
-            respBody = JSON.parse(
-                JSON.stringify(data.response).replace(/\{\{(\w+)\}\}/g, (_, name) => params[name] || '')
-            );
+            respBody = JSON.parse(JSON.stringify(data.response).replace(/\{\{(\w+)\}\}/g, (_, name) => params[name] || ''));
 
-            // map by txId if present
             const txId = (req.body?.data as any)?.tx_id as string | undefined;
             if (txId) {
                 const mapKey = `request:${route}:${req.params[0]}:${txId}`;
-                await redis.set(
-                    mapKey,
-                    JSON.stringify({ request: record, response: { status: data.status, body: respBody } })
-                );
+                await redis.set(mapKey, JSON.stringify({ request: record, response: { status: data.status, body: respBody } }));
                 await redis.expire(mapKey, 30 * 24 * 3600);
             }
 
@@ -247,11 +244,14 @@ async function defaultRequest(req: Request, res: Response): Promise<Response> {
         }
     }
 
-    // 4) no stub matched
     return res.status(404).json({ error: `No stub for ${req.method} ${req.path}` });
 }
 
-/** Attach all common routes under basePath */
+/**
+ * Attach all common routes to a router under a given base path
+ * @param router Express Router to attach routes to
+ * @param basePath Base URL path for the service
+ */
 export function attachCommonRoutes(router: Router, basePath: string): void {
     router.post(`${basePath}/set/*`, saveNewEndpointToRedis);
     router.delete(`${basePath}/delete/*`, deleteEndpointFromRedis);

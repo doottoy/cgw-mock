@@ -50,3 +50,9 @@ export async function removePatternStub(
     if (idx >= 0) patternStubs.splice(idx, 1);
     console.log(`Removed pattern stub ${method.toUpperCase()} ${pattern}`);
 }
+
+export function patternToRedisWildcard(
+    pattern: string
+): string {
+    return pattern.replace(/:\w+/g, '*');
+}
