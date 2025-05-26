@@ -86,9 +86,7 @@ async function getHistory(
     res: Response
 ): Promise<Response> {
     const methodParam = (req.query.method as string) || 'post';
-    const currentMethod = methods.includes(methodParam.toLowerCase())
-        ? methodParam.toLowerCase()
-        : 'post';
+    const currentMethod = methods.includes(methodParam.toLowerCase()) ? methodParam.toLowerCase() : 'post';
     const histKey = getRedisHistoryKey(req, currentMethod);
     const items = await redis.lrange(histKey, 0, 4);
     const records = items.map(item => JSON.parse(item));
@@ -196,6 +194,16 @@ async function defaultRequest(
             respBody.request_id = req.body.request_id || uuidv4();
         }
         respBody = replaceRandomUUID(respBody);
+
+        const txId = (req.body?.data as any)?.tx_id as string | undefined;
+        if (txId) {
+            const route = req.path.split('/')[1];
+            const endpoint = req.params[0];
+            const mapKey = `request:${route}:${endpoint}:${txId}`;
+            await redis.set(mapKey, JSON.stringify({ request: record, response: { status, body: respBody } }));
+            await redis.expire(mapKey, 30 * 24 * 3600);
+        }
+
         const headers = generateHeaders(respBody);
         Object.entries(headers).forEach(([k, v]) => res.setHeader(k, v));
         return res.status(status).json(respBody);
@@ -207,11 +215,18 @@ async function defaultRequest(
         if (m) {
             const params = m.params;
             let respBody = JSON.parse(JSON.stringify(data.response));
-            const substituted = JSON.stringify(respBody).replace(
-                /\{\{(\w+)\}\}/g,
-                (_, name) => params[name] || ''
-            );
+            const substituted = JSON.stringify(respBody).replace(/\{\{(\w+)\}\}/g, (_, name) => params[name] || '');
             respBody = JSON.parse(substituted);
+
+            const txId = (req.body?.data as any)?.tx_id as string | undefined;
+            if (txId) {
+                const route = req.path.split('/')[1];
+                const endpoint = req.params[0];
+                const mapKey = `request:${route}:${endpoint}:${txId}`;
+                await redis.set(mapKey, JSON.stringify({ request: record, response: { status: data.status, body: respBody } }));
+                await redis.expire(mapKey, 30 * 24 * 3600);
+            }
+
             const headers = generateHeaders(respBody);
             Object.entries(headers).forEach(([k, v]) => res.setHeader(k, v));
             return res.status(data.status).json(respBody);
