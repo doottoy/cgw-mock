@@ -10,6 +10,11 @@ import { patternStubs, addPatternStub, removePatternStub } from '../utility/patt
 
 const methods = ['get', 'post', 'put', 'delete', 'patch'];
 
+// Helper to convert a path pattern like "/foo/:id/bar" into a Redis wildcard "*/bar"
+function patternToRedisWildcard(pattern: string): string {
+    return pattern.replace(/:\w+/g, '*');
+}
+
 /**
  * * Create or update a stub (static or pattern)
  * - static: stored by key in Redis
@@ -18,14 +23,12 @@ const methods = ['get', 'post', 'put', 'delete', 'patch'];
  * @param res Express Response object
  * @returns A Response with JSON { result: 'created'|'updated', endpoint: string }
  */
-async function saveNewEndpointToRedis(
-    req: Request,
-    res: Response
-): Promise<Response> {
+async function saveNewEndpointToRedis(req: Request, res: Response): Promise<Response> {
     const { status, response: resp, method } = req.body;
     if (typeof status !== 'number' || typeof resp !== 'object') {
         return res.status(400).json({ error: 'status (number), response (object) required' });
     }
+
     const currentMethod = method && methods.includes(method.toLowerCase()) ? method.toLowerCase() : 'post';
 
     const endpointPattern = req.params[0];
@@ -50,10 +53,7 @@ async function saveNewEndpointToRedis(
  * @param res Express Response
  * @returns 204 No Content if deleted, or 404 Not Found if no stub existed
  */
-async function deleteEndpointFromRedis(
-    req: Request,
-    res: Response
-): Promise<Response> {
+async function deleteEndpointFromRedis(req: Request, res: Response): Promise<Response> {
     const methodParam = (req.query.method as string) || 'post';
     const currentMethod = methods.includes(methodParam.toLowerCase()) ? methodParam.toLowerCase() : 'post';
 
@@ -81,15 +81,26 @@ async function deleteEndpointFromRedis(
  * @param res Express Response
  * @returns JSON array of request records
  */
-async function getHistory(
-    req: Request,
-    res: Response
-): Promise<Response> {
+async function getHistory(req: Request, res: Response): Promise<Response> {
     const methodParam = (req.query.method as string) || 'post';
     const currentMethod = methods.includes(methodParam.toLowerCase()) ? methodParam.toLowerCase() : 'post';
-    const histKey = getRedisHistoryKey(req, currentMethod);
-    const items = await redis.lrange(histKey, 0, 4);
-    const records = items.map(item => JSON.parse(item));
+
+    const route = req.path.split('/')[1];
+    const endpointPattern = req.params[0];
+    let keys: string[];
+
+    if (endpointPattern.includes('/:')) {
+        const wildcard = patternToRedisWildcard(endpointPattern);
+        keys = await redis.keys(`history:${route}:${wildcard}:${currentMethod}`);
+    } else {
+        keys = [getRedisHistoryKey(req, currentMethod)];
+    }
+
+    const records: any[] = [];
+    for (const k of keys) {
+        const items = await redis.lrange(k, 0, 4);
+        records.push(...items.map(i => JSON.parse(i)));
+    }
     return res.status(200).json(records);
 }
 
@@ -99,29 +110,43 @@ async function getHistory(
  * @param res Express Response
  * @returns JSON array of stub definitions
  */
-async function getStubList(
-    req: Request,
-    res: Response
-): Promise<Response> {
+async function getStubList(req: Request, res: Response): Promise<Response> {
     const isGlobal = req.originalUrl === '/stub-list';
-    const keys = isGlobal
-        ? await redis.keys('stub:*')
-        : await redis.keys(`stub:${req.path.split('/')[1]}:*`);
+    const route = isGlobal ? '' : req.path.split('/')[1];
 
+    const staticKeys = isGlobal ? await redis.keys('stub:*') : await redis.keys(`stub:${route}:*`);
     const stubs: any[] = [];
-    for (const key of keys) {
+
+    for (const key of staticKeys) {
         const raw = await redis.get(key);
         if (!raw) continue;
         const { status, response } = JSON.parse(raw);
         if (isGlobal) {
-            const [, route, endpoint] = key.split(':');
-            stubs.push({ route, endpoint, status, response });
+            const [, r, endpoint] = key.split(':');
+            stubs.push({ route: r, endpoint, status, response });
         } else {
-            const route = req.path.split('/')[1];
             const endpoint = key.slice(`stub:${route}:`.length);
             stubs.push({ endpoint, status, response });
         }
     }
+
+    const patternEntries = await redis.hgetall('patternStubs');
+    for (const field in patternEntries) {
+        const [pattern] = field.split(':');
+        if (isGlobal || pattern.startsWith(`/${route}/`)) {
+            const { status, response } = JSON.parse(patternEntries[field]);
+            if (isGlobal) {
+                const parts = pattern.split('/');
+                const r = parts[1] || '';
+                const endpoint = parts.slice(2).join('/');
+                stubs.push({ route: r, endpoint, status, response });
+            } else {
+                const endpoint = pattern.slice(route.length + 2);
+                stubs.push({ endpoint, status, response });
+            }
+        }
+    }
+
     return res.status(200).json(stubs);
 }
 
@@ -154,17 +179,23 @@ async function getMappingByTxId(
  * @param res Express Response
  * @returns JSON { endpoint, status, response } or 404 if stub not found
  */
-async function getStubState(
-    req: Request,
-    res: Response
-): Promise<Response> {
+async function getStubState(req: Request, res: Response): Promise<Response> {
+    const endpointPattern = req.params[0];
+    const stubPath = `${req.baseUrl}/${endpointPattern}`;
+
+    if (stubPath.includes('/:')) {
+        const field = `post:${stubPath}`;
+        const raw = await redis.hget('patternStubs', field);
+        if (!raw) return res.sendStatus(404);
+        const { status, response } = JSON.parse(raw);
+        return res.status(200).json({ endpoint: endpointPattern, status, response });
+    }
+
     const key = getRedisStubKey(req, 'post');
     const raw = await redis.get(key);
-    if (!raw) {
-        return res.sendStatus(404);
-    }
+    if (!raw) return res.sendStatus(404);
     const { status, response } = JSON.parse(raw);
-    return res.status(200).json({ endpoint: req.params[0], status, response });
+    return res.status(200).json({ endpoint: endpointPattern, status, response });
 }
 
 /**
